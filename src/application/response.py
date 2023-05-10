@@ -56,6 +56,11 @@ class EventosResponse:
 
     
     def parsearEstructuraMongo(self, listaEvento):
+        print(json.dumps(listaEvento))
+        estado = ""
+        if listaEvento[2] == 1:
+            estado = "Sin Atender"
+        if
         eventoMongo = {}
         eventoMongo["cod_cuenta"] = "SY001"
         eventoMongo["cod_cliente"] = "SI001"
@@ -74,7 +79,7 @@ class EventosResponse:
         eventoMongo["grupo"] = listaEvento[12]
         eventoMongo["direccion"] = listaEvento[10]
         eventoMongo["fecha_ultima_accion"] = listaEvento[16]
-        eventoMongo["descripcion_estado"] = ""
+        eventoMongo["descripcion_estado"] = listaEvento[-1]
         eventoMongo["estado"] = 1
         eventoMongo["guid"] = ""
         eventoMongo["link_video"] = ""
