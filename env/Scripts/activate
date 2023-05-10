@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\Users\Michell\OneDrive\Documentos\Proyectos\Bots\bot_consumirEventosSQL\env"
+VIRTUAL_ENV="C:\Users\mpach\Documents\UNIVERSIDAD-MICHELL\Flask\Bots\bot_sqlmonitor\env"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

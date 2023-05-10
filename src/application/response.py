@@ -2,24 +2,37 @@ from src.sql.connection import ConnectionSQL
 from src.mongo.connection import ConnectionMongo
 import json
 class EventosResponse:
-    def consultaSQL(self):
+    def procesoEnvioEventos(self, batch_size=1000):
         connection = ConnectionSQL()
         cursor = connection.cursor
-        cursor.execute("SELECT TOP 10 e.*, c.Descripcion, c.FechaCreacion, c.UsuarioCreacion, g.Valor " + 
-            "FROM tbl_Eventos e "+
-            "INNER JOIN (" +
-                "SELECT IdReferenciaPadre, Descripcion, FechaCreacion, UsuarioCreacion, " +
-                    "ROW_NUMBER() OVER (PARTITION BY IdReferenciaPadre ORDER BY FechaCreacion DESC) AS RowNumber " +
-            "FROM tbl_Comentario " +
-            ") c ON e.IdEvento = c.IdReferenciaPadre AND c.RowNumber = 1 "+
-            "INNER JOIN tbl_Global g ON e.IdEstado = g.IdGlobal  WHERE YEAR(e.FechaRecepcion) = 2023")
-        # Obtener los resultados de la consulta
-        results = cursor.fetchall()
-        print("Cantidad de filas 2023:", len(results))
-        print("--------------------------------------")
-        # Imprimir los resultados
-        lista_filas = []
-        cont = 0
+        offset = 0
+        totdatainsert = 0
+        while True:
+            cursor.execute("SELECT e.*, c.Descripcion, c.FechaCreacion, c.UsuarioCreacion, g.Valor " + 
+                "FROM tbl_Eventos e "+
+                "INNER JOIN (" +
+                    "SELECT IdReferenciaPadre, Descripcion, FechaCreacion, UsuarioCreacion, " +
+                        "ROW_NUMBER() OVER (PARTITION BY IdReferenciaPadre ORDER BY FechaCreacion DESC) AS RowNumber " +
+                "FROM tbl_Comentario " +
+                ") c ON e.IdEvento = c.IdReferenciaPadre AND c.RowNumber = 1 "+
+                "INNER JOIN tbl_Global g ON e.IdEstado = g.IdGlobal  WHERE YEAR(e.FechaRecepcion) = 2023 "+
+                f"ORDER BY e.IdEvento OFFSET {offset} ROWS FETCH NEXT {batch_size} ROWS ONLY;")
+            # Obtener los resultados de la consulta
+            results = cursor.fetchall()
+            if not results:
+                break
+            print("Cantidad de filas obtenidas:", len(results))
+            # Imprimir los resultados
+            lista_eventos = self.formatearDatosSQL(results)
+            datainsert = self.insertarMongoDB_lotes(lista_eventos)
+            print("Insertados: "+ str(datainsert))
+            totdatainsert += datainsert
+            offset += batch_size
+        cursor.close()
+        return totdatainsert
+
+    def formatearDatosSQL(self, results):
+        lista_eventos = []
         for row in results:
             row_list = list(row)  # Convierte la fila en una lista
             fecha1 = row_list[14]  # Obtiene la fecha en formato datetime
@@ -38,16 +51,11 @@ class EventosResponse:
             row_list[17] = row_list[17].strip()
             row_list[20] = row_list[20].strip()
             evento = self.parsearEstructuraMongo(row_list)
-            datainsert = self.insertarMongoDB(evento)
-            if datainsert:
-                cont += 1
-            print(cont)
-        cursor.close()
-        return lista_filas
+            lista_eventos.append(evento)
+        return lista_eventos
 
     
     def parsearEstructuraMongo(self, listaEvento):
-        print(json.dumps(listaEvento))
         eventoMongo = {}
         eventoMongo["cod_cuenta"] = "SY001"
         eventoMongo["cod_cliente"] = "SI001"
@@ -67,57 +75,42 @@ class EventosResponse:
         eventoMongo["direccion"] = listaEvento[10]
         eventoMongo["fecha_ultima_accion"] = listaEvento[16]
         eventoMongo["descripcion_estado"] = ""
-        eventoMongo["estado"] = 0
+        eventoMongo["estado"] = 1
         eventoMongo["guid"] = ""
         eventoMongo["link_video"] = ""
         eventoMongo["link_imagen"] = ""
-        eventoMongo["list_comentarios"] = []
+        eventoMongo["list_comentarios"] = [
+            {
+                "comentario": listaEvento[-4],
+                "fechaenvio": listaEvento[-3],
+                "descripcionestado": listaEvento[-1],
+                "rol": "Operador",
+                "usuario": listaEvento[-2]
+            }
+        ]
         return eventoMongo
 
-    def insertarMongoDB(self, evento):
+    def insertarMongoDB_lotes(self, eventos):
+        num_eventos = len(eventos)
         connect = ConnectionMongo()
         db = connect.con
         col = db["notificaciones_test"]
-        result = col.insert_one(evento)
-        if result.acknowledged:
-            return True
-        else:
-            return False
+        num_insertados_total = 0
+        
+        # Dividir la lista de eventos en dos sublistas de tamaño igual
+        mitad = num_eventos // 2
+        eventos1 = eventos[:mitad]
+        eventos2 = eventos[mitad:]
+        
+        # Insertar la primera mitad de eventos
+        result1 = col.insert_many(eventos1, False)
+        num_insertados1 = len(result1.inserted_ids)
+        num_insertados_total += num_insertados1
+        
+        # Insertar la segunda mitad de eventos
+        result2 = col.insert_many(eventos2, False)
+        num_insertados2 = len(result2.inserted_ids)
+        num_insertados_total += num_insertados2
+        
+        return num_insertados_total
 
-
-        #         {
-        #   "_id": {
-        #     "$oid": "644ddc50cf8548f59b30ed38"
-        #   },
-        #   "cod_cuenta": "SY001",
-        #   "cod_cliente": "SI001",
-        #   "cod_evento": "BOTPAN",
-        #   "placa": "FTH678",
-        #   "sigla_cuenta": "CLAV7",
-        #   "sigla_cliente": "QUITBE",
-        #   "prioridad": "CRITICO",
-        #   "origen": "Sys4Log",
-        #   "latitud": "-12.075002",
-        #   "fecha": "2023-04-29",
-        #   "hora": "19:57:41",
-        #   "longitud": "-76.991590",
-        #   "velocidad": "9 km/h",
-        #   "geocerca": "Mapa_Peru",
-        #   "grupo": "Z3",
-        #   "direccion": "Avenida Circunvalación, San Luis, Lima, Peru",
-        #   "fecha_ultima_accion": "2023-04-29 22:14:46",
-        #   "descripcion_estado": "Confirmado",
-        #   "estado": 1,
-        #   "guid": "",
-        #   "link_video": "",
-        #   "link_imagen": "",
-        #   "list_comentarios": [
-        #     {
-        #       "comentario": "Esta notificacion no estaba programada",
-        #       "fechaenvio": "2023-04-29 22:14:46",
-        #       "descripcionestado": "Confirmado",
-        #       "rol": "Administrador",
-        #       "usuario": "quitumbe"
-        #     }
-        #   ]
-        # }
