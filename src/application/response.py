@@ -1,6 +1,7 @@
 from src.sql.connection import ConnectionSQL
 from src.mongo.connection import ConnectionMongo
 import json
+from datetime import datetime, timedelta
 class EventosResponse:
     def procesoEnvioEventos(self, batch_size=1000):
         connection = ConnectionSQL()
@@ -8,6 +9,18 @@ class EventosResponse:
         offset = 0
         totdatainsert = 0
         while True:
+            # cursor.execute("SELECT e.*, c.Descripcion, c.FechaCreacion, c.UsuarioCreacion, g.Valor, t.IdPrioridad " +
+            #                 "FROM tbl_Eventos e " +
+            #                 "INNER JOIN ( " +
+            #                     "SELECT IdReferenciaPadre, Descripcion, FechaCreacion, UsuarioCreacion, " +
+            #                         "ROW_NUMBER() OVER (PARTITION BY IdReferenciaPadre ORDER BY FechaCreacion DESC) AS RowNumber " +
+            #                     "FROM tbl_Comentario " +
+            #                 ") c ON e.IdEvento = c.IdReferenciaPadre AND c.RowNumber = 1 " +
+            #                 "INNER JOIN tbl_Global g ON e.IdEstado = g.IdGlobal " +
+            #                 "INNER JOIN tbl_TipoEvento t ON e.CodEvento = t.CodEvento " +
+            #                 "WHERE CONVERT(DATE, e.FechaCreacion) BETWEEN '2023-05-19' AND '2023-05-22' "+
+            #                     "AND e.CodEvento = t.CodEvento " +
+            #                 "ORDER BY e.IdEvento;")
             cursor.execute("SELECT e.*, c.Descripcion, c.FechaCreacion, c.UsuarioCreacion, g.Valor " + 
                 "FROM tbl_Eventos e "+
                 "INNER JOIN (" +
@@ -35,6 +48,13 @@ class EventosResponse:
         lista_eventos = []
         for row in results:
             row_list = list(row)  # Convierte la fila en una lista
+            fechaR = row_list[6] # Obtiene la fecha en formato datetime
+            try:
+                fecha_obj = datetime.strptime(fechaR, "%d.%m.%Y %H:%M:%S")
+            except Exception as e:
+                fecha_obj = datetime.strptime(fechaR, "%Y.%m.%d %H:%M:%S.%f")
+            nueva_fecha_str = fecha_obj.strftime("%Y-%m-%d %H:%M:%S")
+            row_list[6] = nueva_fecha_str
             fecha1 = row_list[14]  # Obtiene la fecha en formato datetime
             fecha1_str = fecha1.strftime("%d-%m-%Y %H:%M:%S")  # Convierte la fecha a formato string
             row_list[14] = fecha1_str  # Reemplaza la fecha datetime por la fecha string en la lista
@@ -56,11 +76,27 @@ class EventosResponse:
 
     
     def parsearEstructuraMongo(self, listaEvento):
-        print(json.dumps(listaEvento))
-        estado = ""
+        descripcion_estado = ""
+        estado = 0
+        prioridad = ""
         if listaEvento[2] == 1:
-            estado = "Sin Atender"
-        if
+            estado = 0
+            descripcion_estado = "Sin Atender"
+        elif listaEvento[2] == 11:
+            estado = 0
+            descripcion_estado = "En Gestion"
+        elif listaEvento[2] == 2:
+            estado = 1
+            descripcion_estado = "Confirmado"
+        elif listaEvento[2] == 12:
+            estado = 1
+            descripcion_estado = "Descartado"
+        if listaEvento[22] ==  3:
+            prioridad = "CRITICO"
+        elif listaEvento[22] ==  4:
+            prioridad = "URGENTE"
+        elif listaEvento[22] ==  5:
+            prioridad = "REGULAR"
         eventoMongo = {}
         eventoMongo["cod_cuenta"] = "SY001"
         eventoMongo["cod_cliente"] = "SI001"
@@ -68,29 +104,30 @@ class EventosResponse:
         eventoMongo["placa"] = listaEvento[4]
         eventoMongo["sigla_cuenta"] = "SYS NET"
         eventoMongo["sigla_cliente"] = "SIGNIA"
-        eventoMongo["prioridad"] = listaEvento[-1]
+        eventoMongo["prioridad"] = prioridad
         eventoMongo["origen"] = "SQL"
         eventoMongo["latitud"] = listaEvento[7]
-        eventoMongo["fecha"] = listaEvento[6][:9]
-        eventoMongo["hora"] = listaEvento[6][10:]
+        eventoMongo["fecha"] = listaEvento[6][:10]
+        eventoMongo["hora"] = listaEvento[6][11:]
         eventoMongo["longitud"] = listaEvento[8]
         eventoMongo["velocidad"] = listaEvento[9]
         eventoMongo["geocerca"] = listaEvento[11]
         eventoMongo["grupo"] = listaEvento[12]
-        eventoMongo["direccion"] = listaEvento[10]
+        eventoMongo["direccion"] = listaEvento[10].encode('utf-8').decode('unicode_escape')
         eventoMongo["fecha_ultima_accion"] = listaEvento[16]
-        eventoMongo["descripcion_estado"] = listaEvento[-1]
-        eventoMongo["estado"] = 1
+        eventoMongo["descripcion_estado"] = descripcion_estado
+        eventoMongo["estado"] = estado
+        eventoMongo["usuario"] = listaEvento[20]
         eventoMongo["guid"] = ""
         eventoMongo["link_video"] = ""
         eventoMongo["link_imagen"] = ""
         eventoMongo["list_comentarios"] = [
             {
-                "comentario": listaEvento[-4],
-                "fechaenvio": listaEvento[-3],
-                "descripcionestado": listaEvento[-1],
+                "comentario": listaEvento[18],
+                "fechaenvio": listaEvento[19],
+                "descripcionestado": listaEvento[21],
                 "rol": "Operador",
-                "usuario": listaEvento[-2]
+                "usuario": listaEvento[20]
             }
         ]
         return eventoMongo
@@ -99,7 +136,7 @@ class EventosResponse:
         num_eventos = len(eventos)
         connect = ConnectionMongo()
         db = connect.con
-        col = db["notificaciones_test"]
+        col = db["notificaciones"]
         num_insertados_total = 0
         
         # Dividir la lista de eventos en dos sublistas de tamaño igual
@@ -118,4 +155,26 @@ class EventosResponse:
         num_insertados_total += num_insertados2
         
         return num_insertados_total
+    
+    def eliminarRegistrosEventos(self):
+        connect = ConnectionMongo()
+        db = connect.con
+        col = db["notificaciones"]
+        # Definir la fecha de inicio y fin como objetos datetime
+        fecha_inicio = datetime.strptime("2023-05-19", "%Y-%m-%d")
+        fecha_fin = datetime.strptime("2023-05-22", "%Y-%m-%d")
+        # Obtener la diferencia de días entre la fecha de inicio y fin
+        num_dias = (fecha_fin - fecha_inicio).days
+        # Iterar sobre cada día y ejecutar la consulta para esa fecha
+        for i in range(num_dias + 1):
+            fecha_actual = fecha_inicio + timedelta(days=i)
+            fecha_actual_str = fecha_actual.strftime("%Y-%m-%d")
+            # Construir el filtro de consulta para la fecha actual
+            filtro = {"fecha": fecha_actual_str}
+            # Eliminar los registros que cumplan con el filtro
+            result = col.delete_many(filtro)
+            # Obtener el número de documentos eliminados para la fecha actual
+            num_documentos_eliminados = result.deleted_count
+            print(f"Fecha: {fecha_actual_str}, Documentos eliminados: {num_documentos_eliminados}")
+        return True
 

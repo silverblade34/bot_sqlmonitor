@@ -6,6 +6,7 @@ class ConnectionMongo:
     def __init__(self):
         #_ NAME DB
         db = "dbmonitors4"
-        connection = MongoClient('mongodb://root:sys4log44sa@161.35.104.161:27017/',uuidRepresentation='standard')
+        connection = MongoClient('mongodb://monitorSys:sys4log44sa831@67.205.164.216:27017/',uuidRepresentation='standard')
         self.con = connection[db]
 
+    

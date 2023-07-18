@@ -8,6 +8,5 @@ class ConnectionSQL:
         username = 'sa'
         password = '0313334'
         cnxn = pyodbc.connect('DRIVER={SQL Server};SERVER='+server+';DATABASE='+database+';UID='+username+';PWD='+ password)
-
         # Crear un cursor para ejecutar comandos SQL
         self.cursor = cnxn.cursor()

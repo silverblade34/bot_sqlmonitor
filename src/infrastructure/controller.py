@@ -5,3 +5,8 @@ class BotEventos:
         response = EventosResponse()
         data = response.procesoEnvioEventos() 
         return data
+    
+    def personalizadosUpdate(self):
+        response = EventosResponse()
+        data = response.eliminarRegistrosEventos() 
+        return data

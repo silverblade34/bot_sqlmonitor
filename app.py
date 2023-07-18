@@ -1,9 +1,10 @@
 from src.infrastructure.controller import BotEventos
-
+import time 
 def main():
     _events = BotEventos()
     resp = _events.consumirSQLEventos()
     print("TOTAL INSERTADOS: "+str(resp))
-    return resp
+    print(resp)
+    time.sleep(30)
 
 main()
