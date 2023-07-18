@@ -160,21 +160,47 @@ class EventosResponse:
         connect = ConnectionMongo()
         db = connect.con
         col = db["notificaciones"]
-        # Definir la fecha de inicio y fin como objetos datetime
-        fecha_inicio = datetime.strptime("2023-05-19", "%Y-%m-%d")
-        fecha_fin = datetime.strptime("2023-05-22", "%Y-%m-%d")
-        # Obtener la diferencia de días entre la fecha de inicio y fin
-        num_dias = (fecha_fin - fecha_inicio).days
-        # Iterar sobre cada día y ejecutar la consulta para esa fecha
-        for i in range(num_dias + 1):
-            fecha_actual = fecha_inicio + timedelta(days=i)
-            fecha_actual_str = fecha_actual.strftime("%Y-%m-%d")
-            # Construir el filtro de consulta para la fecha actual
-            filtro = {"fecha": fecha_actual_str}
-            # Eliminar los registros que cumplan con el filtro
-            result = col.delete_many(filtro)
-            # Obtener el número de documentos eliminados para la fecha actual
-            num_documentos_eliminados = result.deleted_count
-            print(f"Fecha: {fecha_actual_str}, Documentos eliminados: {num_documentos_eliminados}")
+        filtro = {"origen": "Sys4Log", "descripcion_estado": "Sin Atender", "sigla_cliente": "SIGNIA"}
+        result = col.delete_many(filtro)
+        num_documentos_eliminados = result.deleted_count
+        print(f"Documentos eliminados: {num_documentos_eliminados}")
+        # # Definir la fecha de inicio y fin como objetos datetime
+        # fecha_inicio = datetime.strptime("2023-05-19", "%Y-%m-%d")
+        # fecha_fin = datetime.strptime("2023-05-22", "%Y-%m-%d")
+        # # Obtener la diferencia de días entre la fecha de inicio y fin
+        # num_dias = (fecha_fin - fecha_inicio).days
+        # # Iterar sobre cada día y ejecutar la consulta para esa fecha
+        # for i in range(num_dias + 1):
+        #     fecha_actual = fecha_inicio + timedelta(days=i)
+        #     fecha_actual_str = fecha_actual.strftime("%Y-%m-%d")
+        #     # Construir el filtro de consulta para la fecha actual
+        #     filtro = {"fecha": fecha_actual_str}
+        #     # Eliminar los registros que cumplan con el filtro
+        #     result = col.delete_many(filtro)
+        #     # Obtener el número de documentos eliminados para la fecha actual
+        #     num_documentos_eliminados = result.deleted_count
+        #     print(f"Fecha: {fecha_actual_str}, Documentos eliminados: {num_documentos_eliminados}")
+        return True
+    
+    def editFechaUltimaAccion(self):
+        connect = ConnectionMongo()
+        db = connect.con
+        col = db["notificaciones"]
+        filtro = {"origen": "SQL"}
+        documentos = col.find(filtro)
+        cantidadeditada = 0
+        # Recorrer los documentos y actualizar el campo fecha_ultima_accion
+        for documento in documentos:
+            # Obtener el valor actual del campo fecha_ultima_accion
+            fecha_actual = documento['fecha_ultima_accion']
+            
+            # Convertir la fecha actual al formato deseado (año-mes-dia H:M:S)
+            fecha_actual = datetime.strptime(fecha_actual, "%d-%m-%Y %H:%M:%S")
+            nueva_fecha = fecha_actual.strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Actualizar el campo fecha_ultima_accion en el documento
+            col.update_one({"_id": documento["_id"]}, {"$set": {"fecha_ultima_accion": nueva_fecha}})
+            cantidadeditada += 1
+            print(cantidadeditada)
         return True
 

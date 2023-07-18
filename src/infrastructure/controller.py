@@ -10,3 +10,8 @@ class BotEventos:
         response = EventosResponse()
         data = response.eliminarRegistrosEventos() 
         return data
+    
+    def editarFechaUltimaAccion(self):
+        response = EventosResponse()
+        data = response.editFechaUltimaAccion() 
+        return data
